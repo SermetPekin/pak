@@ -103,7 +103,7 @@ embed <- local({
     )
     tmp <- tempfile()
     on.exit(unlink(tmp), add = TRUE)
-    utils::download.file(url, tmp, quiet = TRUE)
+    pak_download_file(url, tmp, quiet = TRUE)
     # NOTE: we do not handle recursive Remotes and such...
     dsc <- read.dcf(tmp)
     dsc
@@ -240,7 +240,7 @@ embed <- local({
         pkg
       )
       path1 <- file.path(tmp, paste0(pkg_name, ".tar.gz"))
-      download.file(url, path1)
+      pak_download_file(url, path1)
 
       path2 <- file.path(tmp, "pkgraw")
       untar(path1, exdir = path2)

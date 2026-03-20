@@ -1,5 +1,34 @@
 `%||%` <- function(l, r) if (is.null(l)) r else l
 
+# Download helper that prefers curl::curl_download over utils::download.file.
+# On Windows corporate networks, curl handles proxies and custom SSL
+# certificates far better than R's built-in downloader.
+#
+# We deliberately avoid requireNamespace("curl") because on Windows with
+# corporate library configurations pak's .onLoad does NOT call use_private_lib()
+# in the main process, so the embedded curl is not on .libPaths() and the
+# user-installed curl may not be reachable either.  Instead we load curl
+# directly from pak's own private/embedded library, which is always present.
+pak_download_file <- function(url, destfile, quiet = FALSE, mode = "w", ...) {
+  curl_ns <- tryCatch(
+    # Prefer pak's own bundled curl (always present, correct version).
+    loadNamespace("curl", lib.loc = private_lib_dir()),
+    error = function(e) NULL
+  )
+  if (is.null(curl_ns)) {
+    # Fall back to whatever curl the user may have installed.
+    curl_ns <- tryCatch(
+      loadNamespace("curl"),
+      error = function(e) NULL
+    )
+  }
+  if (!is.null(curl_ns)) {
+    curl_ns$curl_download(url, destfile, quiet = quiet, mode = mode)
+  } else {
+    utils::download.file(url, destfile, quiet = quiet, mode = mode, ...)
+  }
+}
+
 # Adapted from withr:::merge_new
 merge_new <- function(old, new, action = c("replace", "prepend", "append")) {
   action <- match.arg(action, c("replace", "prepend", "append"))

@@ -302,10 +302,22 @@ bioconductor <- local({
   # -------------------------------------------------------------------
   # Internals
 
+  # Prefer curl::curl_download for better proxy/SSL support on corporate networks.
+  # Use loadNamespace so we find curl even when .libPaths() has been narrowed to
+  # pak's private library and the user-installed curl is not reachable.
+  pkgcache_download_file <- function(url, destfile, quiet = FALSE, mode = "w") {
+    curl_ns <- tryCatch(loadNamespace("curl"), error = function(e) NULL)
+    if (!is.null(curl_ns)) {
+      curl_ns$curl_download(url, destfile, quiet = quiet, mode = mode)
+    } else {
+      utils::download.file(url, destfile, quiet = quiet, mode = mode)
+    }
+  }
+
   read_url <- function(url) {
     tmp <- tempfile()
     on.exit(unlink(tmp), add = TRUE)
-    suppressWarnings(download.file(url, tmp, quiet = TRUE))
+    suppressWarnings(pkgcache_download_file(url, tmp, quiet = TRUE))
     if (!file.exists(tmp) || file.info(tmp)$size == 0) {
       stop("Failed to download `", url, "`")
     }
