@@ -36,11 +36,19 @@ check <- function(label, expr) {
 # 1. Poison utils::download.file to simulate proxy failure
 # ---------------------------------------------------------------------------
 cat("-- Poisoning utils::download.file --\n")
-assignInNamespace(
+utils_ns <- asNamespace("utils")
+utils_original_download <- get("download.file", envir = utils_ns)
+unlockBinding("download.file", utils_ns)
+assign(
   "download.file",
   function(...) stop("Simulated corporate proxy failure"),
-  ns = "utils"
+  envir = utils_ns
 )
+on.exit({
+  unlockBinding("download.file", utils_ns)
+  assign("download.file", utils_original_download, envir = utils_ns)
+  lockBinding("download.file", utils_ns)
+}, add = TRUE)
 
 # ---------------------------------------------------------------------------
 # 2. Test bioc.R fallback when config URL is unreachable
