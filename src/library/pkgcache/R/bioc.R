@@ -343,7 +343,7 @@ bioconductor <- local({
   # devel_version and r_ver_for_bioc_ver from the statically known mapping.
   builtin_yaml_config <- function() {
     bioc_versions <- sort(package_version(
-      as.character(unlist(builtin_map))
+      vapply(builtin_map, as.character, character(1L))
     ))
     release <- as.character(max(bioc_versions))
     # Devel is conventionally one minor version ahead of release
@@ -401,7 +401,8 @@ bioconductor <- local({
       get_version_map = get_version_map,
       get_matching_bioc_version = get_matching_bioc_version,
       get_bioc_version = get_bioc_version,
-      get_repos = get_repos
+      get_repos = get_repos,
+      clear_cache = clear_cache
     ),
     class = c("standalone_bioc", "standalone")
   )
