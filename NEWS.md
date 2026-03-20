@@ -1,5 +1,14 @@
 # pak (development version)
 
+* pak now works on corporate networks where `utils::download.file` fails due
+  to proxy or SSL inspection. Downloads use `curl::curl_download` when
+  available, falling back to `utils::download.file`.
+
+* When Bioconductor's configuration endpoint is unreachable (e.g. on networks
+  that block external HTTPS), pak falls back to a built-in R-to-Bioconductor
+  version map and issues a warning instead of failing hard. Set the
+  `R_BIOC_VERSION` environment variable to pin a specific Bioconductor version.
+
 * Setting `use_bioconductor = FALSE` (i.e. the `PKG_USE_BIOCONDUCTOR`
   env var, or the `pkg.use_bioconductor` option) now truly prevents
   any network contact with Bioconductor.

@@ -152,7 +152,19 @@ bioconductor <- local({
         http_url <- sub("^https", "http", config_url())
         new <- tryCatch(read_url(http_url), error = function(x) x)
       }
-      if (inherits(new, "error")) stop(new)
+      if (inherits(new, "error")) {
+        # Bioconductor.org is unreachable (common on corporate networks).
+        # Fall back to a synthetic config derived from the builtin R->Bioc
+        # version map so that package installation can continue offline.
+        warning(
+          "Could not download Bioconductor config.yaml from ",
+          config_url(),
+          ".\nFalling back to built-in Bioconductor version map. ",
+          "Set R_BIOC_VERSION to pin a specific version.",
+          call. = FALSE
+        )
+        new <- builtin_yaml_config()
+      }
       yaml_config <<- new
     }
 
@@ -302,14 +314,60 @@ bioconductor <- local({
   # -------------------------------------------------------------------
   # Internals
 
+  # Prefer curl::curl_download for better proxy/SSL support on corporate
+  # networks. loadNamespace() is used instead of requireNamespace() so that
+  # we find curl even when .libPaths() has been narrowed to pak's private
+  # library and the user-installed curl is not reachable.
+  pkgcache_download_file <- function(url, destfile, quiet = FALSE, mode = "w") {
+    curl_ns <- tryCatch(loadNamespace("curl"), error = function(e) NULL)
+    if (!is.null(curl_ns)) {
+      curl_ns$curl_download(url, destfile, quiet = quiet, mode = mode)
+    } else {
+      utils::download.file(url, destfile, quiet = quiet, mode = mode)
+    }
+  }
+
   read_url <- function(url) {
     tmp <- tempfile()
     on.exit(unlink(tmp), add = TRUE)
-    suppressWarnings(download.file(url, tmp, quiet = TRUE))
+    suppressWarnings(pkgcache_download_file(url, tmp, quiet = TRUE))
     if (!file.exists(tmp) || file.info(tmp)$size == 0) {
       stop("Failed to download `", url, "`")
     }
     readLines(tmp, warn = FALSE)
+  }
+
+  # Synthetic minimal config.yaml built from builtin_map.
+  # Used as a fallback when bioconductor.org is unreachable (e.g. corporate
+  # networks that block external HTTPS). Generates release_version,
+  # devel_version and r_ver_for_bioc_ver from the statically known mapping.
+  builtin_yaml_config <- function() {
+    bioc_versions <- sort(package_version(
+      vapply(builtin_map, as.character, character(1L))
+    ))
+    release <- as.character(max(bioc_versions))
+    # Devel is conventionally one minor version ahead of release
+    rel_parts <- as.integer(strsplit(release, "\\.")[[1L]])
+    devel <- paste(rel_parts[1L], rel_parts[2L] + 1L, sep = ".")
+    # Build r_ver_for_bioc_ver section (bioc -> r, reversed from builtin_map)
+    bioc_to_r <- vapply(
+      names(builtin_map),
+      function(r) as.character(builtin_map[[r]]),
+      character(1L)
+    )
+    map_lines <- paste0(
+      "  \"", bioc_to_r, "\": \"", names(builtin_map), "\""
+    )
+    c(
+      paste0("release_version: \"", release, "\""),
+      paste0("devel_version: \"",   devel,   "\""),
+      "r_ver_for_bioc_ver:",
+      map_lines,
+      # Trailing sentinel required by get_version_map(), which slices the
+      # map entries between r_ver_for_bioc_ver and the *next* top-level key
+      # (grps[start+1]). Without this the slice produces seq(N, NA-1) -> error.
+      "_end_of_builtin_map:"
+    )
   }
 
   .VERSION_SENTINEL <- local({
@@ -343,7 +401,8 @@ bioconductor <- local({
       get_version_map = get_version_map,
       get_matching_bioc_version = get_matching_bioc_version,
       get_bioc_version = get_bioc_version,
-      get_repos = get_repos
+      get_repos = get_repos,
+      clear_cache = clear_cache
     ),
     class = c("standalone_bioc", "standalone")
   )
